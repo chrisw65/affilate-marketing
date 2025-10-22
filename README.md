@@ -1,6 +1,6 @@
-# Advanced Affiliate Management System - Phase 1 MVP
+# Advanced Affiliate Management System - Phase 1 & 2
 
-A robust, production-ready affiliate marketing platform with webhook ingestion, attribution tracking, commission calculation, and automated payouts.
+A robust, production-ready affiliate marketing platform with webhook ingestion, attribution tracking, commission calculation, automated payouts, reconciliation, and scheduled automation.
 
 ## Table of Contents
 
@@ -69,6 +69,40 @@ A robust, production-ready affiliate marketing platform with webhook ingestion, 
 - Batch processing
 - Multi-currency support
 - Payout status tracking
+
+### Phase 2 (Completed)
+
+✅ **Automated Payouts**
+- Stripe Connect integration for automated transfers
+- Weekly automated payout runs
+- Failed payout retry logic (up to 3 attempts)
+- Connect account onboarding flow
+- Multi-currency payout support
+
+✅ **Reconciliation System**
+- Daily Stripe order reconciliation
+- Automatic mismatch detection
+- Auto-resolve missing orders
+- Reconciliation history and audit trail
+- Tolerance-based amount matching
+
+✅ **Email Notifications**
+- Welcome emails for new affiliates
+- Account approval notifications
+- Commission earned alerts
+- Payout processed/failed notifications
+- Monthly performance summaries
+- HTML email templates
+
+✅ **Automated Scheduling**
+- Cron-based job scheduler
+- Daily commission approval (2 AM UTC)
+- Daily reconciliation (3 AM UTC)
+- Weekly automated payouts (Mondays 10 AM)
+- Failed payout retries (4 PM daily)
+- Monthly summaries (1st of month)
+- Automated log cleanup
+- Manual job triggering via API
 
 ---
 
@@ -574,6 +608,75 @@ Content-Type: application/json
 }
 ```
 
+#### Process Automated Payouts (Phase 2)
+
+```http
+POST /api/admin/payouts/process-automated
+```
+
+Triggers automated Stripe Connect payouts for all eligible affiliates.
+
+#### Retry Failed Payouts (Phase 2)
+
+```http
+POST /api/admin/payouts/retry-failed
+```
+
+Retries all failed payouts (max 3 attempts per payout).
+
+#### Run Reconciliation (Phase 2)
+
+```http
+POST /api/admin/reconciliation/run?start_date=2025-10-21&end_date=2025-10-22&auto_resolve=true
+```
+
+Reconciles Stripe charges with internal orders. Set `auto_resolve=true` to automatically create missing orders.
+
+#### Get Reconciliation History (Phase 2)
+
+```http
+GET /api/admin/reconciliation/history?limit=10
+```
+
+Returns recent reconciliation run results.
+
+#### Get Scheduler Status (Phase 2)
+
+```http
+GET /api/admin/scheduler/status
+```
+
+Returns status of all scheduled jobs.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "jobs": [
+      {"name": "approve-commissions", "running": true},
+      {"name": "reconcile-orders", "running": true},
+      {"name": "process-payouts", "running": true}
+    ],
+    "totalJobs": 6
+  }
+}
+```
+
+#### Trigger Scheduled Job (Phase 2)
+
+```http
+POST /api/admin/scheduler/trigger/approve-commissions
+```
+
+Manually triggers a scheduled job. Available jobs:
+- `approve-commissions`
+- `reconcile-orders`
+- `process-payouts`
+- `retry-failed-payouts`
+- `monthly-summaries`
+- `cleanup-logs`
+
 ---
 
 ## Webhook Integration
@@ -717,7 +820,11 @@ affilate-marketing/
 │   │   ├── auth.service.ts
 │   │   ├── click.service.ts
 │   │   ├── commission.service.ts
+│   │   ├── email.service.ts        # Phase 2
 │   │   ├── payout.service.ts
+│   │   ├── reconciliation.service.ts # Phase 2
+│   │   ├── scheduler.service.ts    # Phase 2
+│   │   ├── stripe-payout.service.ts # Phase 2
 │   │   └── webhook.service.ts
 │   ├── types/                 # TypeScript types
 │   │   └── index.ts
@@ -745,15 +852,17 @@ affilate-marketing/
 
 ## Roadmap
 
-### Phase 2 - Reliability & Payouts (Weeks 5-9)
+### Phase 2 - Reliability & Payouts ✅ (Completed)
 
-- [ ] Reconciliation jobs (Stripe vs internal orders)
-- [ ] Automated Stripe Connect payouts
-- [ ] PayPal Payouts integration
-- [ ] Tax form collection (W-9, W-8BEN)
-- [ ] KYC verification workflow
-- [ ] Email notifications
-- [ ] Payout statements
+- [x] Reconciliation jobs (Stripe vs internal orders)
+- [x] Automated Stripe Connect payouts
+- [x] Email notifications
+- [x] Scheduled job automation
+- [x] Failed payout retry logic
+- [ ] PayPal Payouts integration (moved to Phase 3)
+- [ ] Tax form collection (W-9, W-8BEN) (moved to Phase 3)
+- [ ] KYC verification workflow (moved to Phase 3)
+- [ ] Payout statements (moved to Phase 3)
 
 ### Phase 3 - Advanced Features (Weeks 10-15)
 
