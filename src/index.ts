@@ -2,6 +2,7 @@ import app from './app';
 import config from './config/env';
 import prisma from './config/database';
 import logger from './utils/logger';
+import schedulerService from './services/scheduler.service';
 
 const PORT = config.port;
 
@@ -16,10 +17,24 @@ async function connectDatabase() {
   }
 }
 
+// Initialize scheduled jobs
+function initializeScheduler() {
+  try {
+    schedulerService.initializeJobs();
+    logger.info('Scheduler initialized successfully');
+  } catch (error) {
+    logger.error('Failed to initialize scheduler', error);
+    // Don't exit - scheduler is not critical for basic operation
+  }
+}
+
 // Start server
 async function startServer() {
   try {
     await connectDatabase();
+
+    // Initialize scheduler for automated tasks
+    initializeScheduler();
 
     app.listen(PORT, () => {
       logger.info(`Server started successfully`, {
@@ -43,6 +58,19 @@ async function startServer() {
 }
 
 startServer();
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received, shutting down gracefully...');
+  schedulerService.stopAllJobs();
+  process.exit(0);
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received, shutting down gracefully...');
+  schedulerService.stopAllJobs();
+  process.exit(0);
+});
 
 // Handle unhandled rejections
 process.on('unhandledRejection', (reason: any) => {

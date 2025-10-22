@@ -49,4 +49,16 @@ router.get('/payouts/csv', adminController.generatePayoutCSV);
 router.post('/payouts/batch', adminController.createPayoutBatch);
 router.patch('/payouts/:id/status', adminController.updatePayoutStatus);
 
+// Phase 2: Automated payouts
+router.post('/payouts/process-automated', adminController.processAutomatedPayouts);
+router.post('/payouts/retry-failed', adminController.retryFailedPayouts);
+
+// Phase 2: Reconciliation
+router.post('/reconciliation/run', adminController.runReconciliation);
+router.get('/reconciliation/history', adminController.getReconciliationHistory);
+
+// Phase 2: Scheduler management
+router.get('/scheduler/status', adminController.getSchedulerStatus);
+router.post('/scheduler/trigger/:jobName', adminController.triggerScheduledJob);
+
 export default router;

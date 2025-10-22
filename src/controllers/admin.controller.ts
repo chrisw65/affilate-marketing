@@ -2,6 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import adminService from '../services/admin.service';
 import payoutService from '../services/payout.service';
 import commissionService from '../services/commission.service';
+import reconciliationService from '../services/reconciliation.service';
+import stripePayoutService from '../services/stripe-payout.service';
+import schedulerService from '../services/scheduler.service';
 import { AuthenticatedRequest, ApiResponse } from '../types';
 import { AppError } from '../middleware/errorHandler';
 import { AffiliateStatus, CommissionStatus, PayoutStatus } from '@prisma/client';
@@ -290,6 +293,134 @@ export class AdminController {
       const response: ApiResponse = {
         success: true,
         data: payout,
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Run reconciliation
+   */
+  async runReconciliation(req: Request, res: Response, next: NextFunction) {
+    try {
+      const startDate = req.query.start_date
+        ? new Date(req.query.start_date as string)
+        : new Date(Date.now() - 24 * 60 * 60 * 1000); // Default: yesterday
+      const endDate = req.query.end_date
+        ? new Date(req.query.end_date as string)
+        : new Date();
+      const autoResolve = req.query.auto_resolve === 'true';
+
+      const result = await reconciliationService.reconcileStripeOrders(
+        startDate,
+        endDate,
+        autoResolve
+      );
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get reconciliation history
+   */
+  async getReconciliationHistory(req: Request, res: Response, next: NextFunction) {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 10, 100);
+      const history = await reconciliationService.getReconciliationHistory(limit);
+
+      const response: ApiResponse = {
+        success: true,
+        data: history,
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Process automated Stripe payouts
+   */
+  async processAutomatedPayouts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await stripePayoutService.processAutomatedPayouts();
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Retry failed payouts
+   */
+  async retryFailedPayouts(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await stripePayoutService.retryFailedPayouts();
+
+      const response: ApiResponse = {
+        success: true,
+        data: result,
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Get scheduler job status
+   */
+  async getSchedulerStatus(req: Request, res: Response, next: NextFunction) {
+    try {
+      const status = schedulerService.getJobStatus();
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          jobs: status,
+          totalJobs: status.length,
+        },
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Manually trigger a scheduled job
+   */
+  async triggerScheduledJob(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { jobName } = req.params;
+      const result = await schedulerService.triggerJob(jobName);
+
+      const response: ApiResponse = {
+        success: true,
+        data: {
+          job: jobName,
+          result,
+        },
       };
 
       res.status(200).json(response);
