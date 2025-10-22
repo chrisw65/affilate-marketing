@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Affiliate Dashboard</title>
+    <link rel="stylesheet" href="/portal/css/style.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <nav class="sidebar">
+            <h2>Affiliate Portal</h2>
+            <ul>
+                <li><a href="dashboard.html" class="active">Dashboard</a></li>
+                <li><a href="clicks.html">Clicks</a></li>
+                <li><a href="commissions.html">Commissions</a></li>
+                <li><a href="links.html">Tracking Links</a></li>
+                <li><a href="payouts.html">Payouts</a></li>
+                <li><a href="profile.html">Profile</a></li>
+                <li><a href="#" id="logout-btn">Logout</a></li>
+            </ul>
+        </nav>
+
+        <main class="main-content">
+            <header>
+                <h1>Dashboard</h1>
+                <p id="welcome-message">Welcome back!</p>
+            </header>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Clicks</h3>
+                    <p class="stat-value" id="total-clicks">-</p>
+                    <small id="clicks-period">Last 30 days</small>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Conversions</h3>
+                    <p class="stat-value" id="conversions">-</p>
+                    <small>Conversion Rate: <span id="conversion-rate">0%</span></small>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Pending Earnings</h3>
+                    <p class="stat-value" id="pending-earnings">$0.00</p>
+                    <small id="pending-count">0 commissions</small>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Approved Earnings</h3>
+                    <p class="stat-value" id="approved-earnings">$0.00</p>
+                    <small id="approved-count">0 commissions</small>
+                </div>
+
+                <div class="stat-card">
+                    <h3>Total Paid</h3>
+                    <p class="stat-value" id="paid-earnings">$0.00</p>
+                    <small id="paid-count">0 payouts</small>
+                </div>
+
+                <div class="stat-card">
+                    <h3>EPC</h3>
+                    <p class="stat-value" id="epc">$0.00</p>
+                    <small>Earnings per click</small>
+                </div>
+            </div>
+
+            <div class="activity-section">
+                <h2>Recent Activity</h2>
+                <div id="recent-activity">
+                    <p>Loading...</p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/portal/js/api.js"></script>
+    <script src="/portal/js/dashboard.js"></script>
+</body>
+</html>

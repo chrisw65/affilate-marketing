@@ -1,0 +1,529 @@
+// Prisma Schema for Advanced Affiliate Management System
+// Phase 1: Core Models
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum AffiliateStatus {
+  PENDING   // Awaiting approval
+  ACTIVE    // Approved and can track clicks
+  SUSPENDED // Temporarily disabled
+  BANNED    // Permanently disabled
+}
+
+enum KYCStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  APPROVED
+  REJECTED
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  PARTIALLY_REFUNDED
+  CANCELLED
+  DISPUTED
+}
+
+enum CommissionStatus {
+  PENDING     // Commission calculated but not yet approved
+  APPROVED    // Ready for payout after hold period
+  HELD        // On hold due to dispute or investigation
+  PAID        // Included in a payout
+  REVERSED    // Clawed back due to refund/chargeback
+  CANCELLED   // Invalidated
+}
+
+enum PayoutStatus {
+  PENDING     // Scheduled but not yet executed
+  PROCESSING  // Being sent to payment provider
+  COMPLETED   // Successfully paid
+  FAILED      // Payment failed
+  CANCELLED   // Manually cancelled
+}
+
+enum PayoutMethod {
+  STRIPE_CONNECT
+  PAYPAL
+  BANK_TRANSFER
+  MANUAL
+}
+
+enum WebhookSource {
+  STRIPE
+  CLICKFUNNELS
+  GROOVE
+  MANUAL
+}
+
+enum AttributionModel {
+  LAST_CLICK
+  FIRST_CLICK
+  LINEAR
+  POSITION_BASED
+  TIME_DECAY
+}
+
+// ============================================================================
+// CORE MODELS
+// ============================================================================
+
+model Affiliate {
+  id                String          @id @default(uuid())
+  email             String          @unique
+  password          String          // bcrypt hashed
+  firstName         String?
+  lastName          String?
+  company           String?
+  status            AffiliateStatus @default(PENDING)
+  kycStatus         KYCStatus       @default(NOT_STARTED)
+
+  // Contact & Tax Info
+  phone             String?
+  country           String?
+  taxId             String?         // SSN/EIN/VAT number
+  taxFormSubmitted  Boolean         @default(false)
+
+  // Payout Configuration
+  payoutMethod      PayoutMethod    @default(STRIPE_CONNECT)
+  payoutEmail       String?         // PayPal email or similar
+  payoutCurrency    String          @default("USD")
+  minPayoutThreshold Int            @default(5000) // in cents
+
+  // Commission Settings
+  commissionRate    Float           @default(0.40) // 40% default
+  commissionTier    String?         // For tiered structures
+
+  // API Access
+  apiKey            String          @unique @default(uuid())
+
+  // Metadata
+  notes             String?
+  tags              String[]        @default([])
+  customData        Json?
+
+  // Timestamps
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  lastLoginAt       DateTime?
+  approvedAt        DateTime?
+
+  // Relations
+  clicks            Click[]
+  orders            Order[]
+  commissions       Commission[]
+  payouts           Payout[]
+  trackingLinks     TrackingLink[]
+  sessions          Session[]
+
+  @@index([email])
+  @@index([status])
+  @@index([apiKey])
+  @@map("affiliates")
+}
+
+model TrackingLink {
+  id            String    @id @default(uuid())
+  affiliateId   String
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  // Link Configuration
+  name          String
+  offerId       String?
+  destinationUrl String
+
+  // Tracking Parameters
+  utmSource     String?
+  utmMedium     String?
+  utmCampaign   String?
+  utmTerm       String?
+  utmContent    String?
+
+  // SubIDs for pass-through
+  allowSubIds   Boolean   @default(true)
+
+  // Coupon Integration
+  couponCode    String?   @unique
+
+  // Status
+  isActive      Boolean   @default(true)
+  expiresAt     DateTime?
+
+  // Metadata
+  notes         String?
+  customData    Json?
+
+  // Stats (denormalized for performance)
+  totalClicks   Int       @default(0)
+  uniqueClicks  Int       @default(0)
+  conversions   Int       @default(0)
+
+  // Timestamps
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  clicks        Click[]
+
+  @@index([affiliateId])
+  @@index([couponCode])
+  @@map("tracking_links")
+}
+
+model Click {
+  id              String        @id @default(uuid())
+  affiliateId     String
+  affiliate       Affiliate     @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  trackingLinkId  String?
+  trackingLink    TrackingLink? @relation(fields: [trackingLinkId], references: [id], onDelete: SetNull)
+
+  sessionId       String?
+  session         Session?      @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  // Click Data
+  clickToken      String        @unique // Used in cookie and attribution
+
+  // UTM Parameters
+  utmSource       String?
+  utmMedium       String?
+  utmCampaign     String?
+  utmTerm         String?
+  utmContent      String?
+
+  // SubIDs (custom pass-through)
+  sub1            String?
+  sub2            String?
+  sub3            String?
+  sub4            String?
+  sub5            String?
+
+  // Device & Location
+  ipAddress       String?
+  userAgent       String?
+  deviceType      String?       // mobile, desktop, tablet
+  browser         String?
+  os              String?
+  country         String?
+  city            String?
+
+  // Referrer
+  referrer        String?
+  landingPage     String?
+
+  // Attribution
+  converted       Boolean       @default(false)
+  convertedAt     DateTime?
+
+  // Timestamps
+  createdAt       DateTime      @default(now())
+
+  // Relations
+  orders          Order[]
+
+  @@index([affiliateId])
+  @@index([clickToken])
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([converted])
+  @@map("clicks")
+}
+
+model Session {
+  id              String    @id @default(uuid())
+  affiliateId     String?
+  affiliate       Affiliate? @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+
+  // Session tracking
+  sessionToken    String    @unique
+  fingerprint     String?   // Browser fingerprint hash
+
+  // Device info
+  ipAddress       String?
+  userAgent       String?
+
+  // Consent
+  cookieConsent   Boolean   @default(false)
+
+  // Timestamps
+  firstSeen       DateTime  @default(now())
+  lastSeen        DateTime  @default(now())
+  expiresAt       DateTime
+
+  // Relations
+  clicks          Click[]
+  orders          Order[]
+
+  @@index([sessionToken])
+  @@index([affiliateId])
+  @@map("sessions")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  externalId      String      @unique // Stripe charge_id or ClickFunnels order_id
+
+  // Attribution
+  affiliateId     String?
+  affiliate       Affiliate?  @relation(fields: [affiliateId], references: [id], onDelete: SetNull)
+
+  clickId         String?
+  click           Click?      @relation(fields: [clickId], references: [id], onDelete: SetNull)
+
+  sessionId       String?
+  session         Session?    @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  // Order Details
+  customerEmail   String
+  customerId      String?     // Stripe customer_id or external customer ref
+
+  // Amounts (stored in cents/minor units)
+  totalAmount     Int         // Total order amount
+  subtotal        Int?
+  taxAmount       Int?        @default(0)
+  shippingAmount  Int?        @default(0)
+  discountAmount  Int?        @default(0)
+  currency        String      @default("USD")
+
+  // Order Items (stored as JSON for flexibility)
+  items           Json        // Array of {sku, name, quantity, price, ...}
+
+  // Discount/Coupon
+  couponCode      String?
+
+  // Status
+  status          OrderStatus @default(PENDING)
+
+  // Source tracking
+  source          WebhookSource
+  sourceMetadata  Json?       // Raw webhook payload for audit
+
+  // Subscription tracking (for recurring)
+  subscriptionId  String?
+  isRecurring     Boolean     @default(false)
+  recurringPeriod String?     // monthly, yearly, etc.
+
+  // Refund tracking
+  refundedAmount  Int?        @default(0)
+  refundedAt      DateTime?
+
+  // Timestamps
+  orderDate       DateTime    @default(now())
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relations
+  commissions     Commission[]
+  webhookEvents   WebhookEvent[]
+
+  @@index([externalId])
+  @@index([affiliateId])
+  @@index([clickId])
+  @@index([customerEmail])
+  @@index([status])
+  @@index([orderDate])
+  @@map("orders")
+}
+
+model Commission {
+  id                  String            @id @default(uuid())
+
+  // Attribution
+  affiliateId         String
+  affiliate           Affiliate         @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  orderId             String
+  order               Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Commission Calculation
+  commissionAmount    Int               // in cents
+  currency            String            @default("USD")
+  commissionRate      Float             // Frozen at time of calculation
+
+  // Order snapshot (for audit)
+  orderTotal          Int
+  calculationSnapshot Json              // Frozen inputs for recalculation/audit
+
+  // Status
+  status              CommissionStatus  @default(PENDING)
+
+  // Hold period
+  holdUntil           DateTime?         // When commission becomes payable
+  approvedAt          DateTime?
+
+  // Payout tracking
+  payoutId            String?
+  payout              Payout?           @relation(fields: [payoutId], references: [id], onDelete: SetNull)
+  paidAt              DateTime?
+
+  // Reversal tracking
+  reversedAt          DateTime?
+  reversalReason      String?
+  originalCommissionId String?          // If this is a reversal, link to original
+
+  // Metadata
+  notes               String?
+
+  // Timestamps
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([affiliateId])
+  @@index([orderId])
+  @@index([status])
+  @@index([payoutId])
+  @@index([holdUntil])
+  @@map("commissions")
+}
+
+model Payout {
+  id                String        @id @default(uuid())
+
+  affiliateId       String
+  affiliate         Affiliate     @relation(fields: [affiliateId], references: [id], onDelete: Cascade)
+
+  // Payout Details
+  amount            Int           // in cents
+  currency          String        @default("USD")
+  method            PayoutMethod
+  status            PayoutStatus  @default(PENDING)
+
+  // Fees & FX
+  feeAmount         Int?          @default(0)
+  fxRate            Float?
+  originalAmount    Int?          // If currency conversion occurred
+  originalCurrency  String?
+
+  // External references
+  externalId        String?       // Stripe transfer_id, PayPal batch_id, etc.
+  transactionId     String?
+
+  // Recipient details
+  recipientEmail    String?
+  recipientAccount  String?
+
+  // Batch tracking
+  batchId           String?
+
+  // Failure tracking
+  failureReason     String?
+  retryCount        Int           @default(0)
+
+  // Timestamps
+  scheduledAt       DateTime?
+  processedAt       DateTime?
+  completedAt       DateTime?
+  failedAt          DateTime?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // Relations
+  commissions       Commission[]
+
+  @@index([affiliateId])
+  @@index([status])
+  @@index([batchId])
+  @@index([scheduledAt])
+  @@map("payouts")
+}
+
+model WebhookEvent {
+  id              String        @id @default(uuid())
+
+  // Event metadata
+  source          WebhookSource
+  eventType       String        // checkout.session.completed, order.created, etc.
+  externalId      String        // Event ID from source system
+
+  // Idempotency
+  idempotencyKey  String        @unique
+
+  // Payload
+  payload         Json          // Full raw webhook payload
+  headers         Json?         // Request headers (for debugging)
+
+  // Processing
+  processed       Boolean       @default(false)
+  processedAt     DateTime?
+  processingError String?
+  retryCount      Int           @default(0)
+
+  // Signature verification
+  signatureValid  Boolean?
+
+  // Order linkage
+  orderId         String?
+  order           Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  // Timestamps
+  occurredAt      DateTime      // When event occurred in source system
+  receivedAt      DateTime      @default(now())
+
+  @@index([source])
+  @@index([eventType])
+  @@index([externalId])
+  @@index([idempotencyKey])
+  @@index([processed])
+  @@index([receivedAt])
+  @@map("webhook_events")
+}
+
+// ============================================================================
+// ADMIN & AUDIT
+// ============================================================================
+
+model AuditLog {
+  id          String   @id @default(uuid())
+
+  // Actor
+  userId      String?  // Affiliate or admin ID
+  userEmail   String?
+  userRole    String?  // affiliate, admin, system
+
+  // Action
+  action      String   // create, update, delete, approve, etc.
+  resource    String   // affiliate, commission, payout, order
+  resourceId  String?
+
+  // Changes
+  oldValue    Json?
+  newValue    Json?
+
+  // Context
+  ipAddress   String?
+  userAgent   String?
+  reason      String?
+
+  // Timestamps
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemConfig {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       Json
+  description String?
+  updatedBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("system_config")
+}
